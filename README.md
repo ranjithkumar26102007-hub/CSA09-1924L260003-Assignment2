@@ -38,13 +38,23 @@ CampusSmartParking_Assignment2/
 │   │       Q1TicketBenchmark$TicketBuilder.class
 │   │       Q1TicketBenchmark$Workload.class
 │   ├───screenshots/
+│   │       Q1-Benchmark-Full.png
 │   └───src/
 │           Q1TicketBenchmark.java
 │           
 ├───Task02_CollectionsComparison/
+│   │   Q2_Analysis.md
 │   ├───data/
+│   │       Q2_benchmark_results.csv
+│   ├───out/
+│   │       Q2PlaylistBenchmark.class
+│   │       Q2PlaylistBenchmark$BenchmarkAction.class
+│   │       Q2PlaylistBenchmark$ListSupplier.class
+│   │       Q2PlaylistBenchmark$OpResult.class
+│   │       Q2PlaylistBenchmark$Song.class
 │   ├───screenshots/
 │   └───src/
+│           Q2PlaylistBenchmark.java
 │           
 ├───Task03_HashSet_Student/
 │   ├───data/
@@ -74,7 +84,7 @@ CampusSmartParking_Assignment2/
 
 ---
 
-## 3. Compilation and Execution Guide for Q1
+## 3. Compilation and Execution Guide
 
 All tasks are configured to compile into dedicated `out/` directories to maintain clean separation between source and bytecode.
 
@@ -83,26 +93,41 @@ All tasks are configured to compile into dedicated `out/` directories to maintai
 Set-Location -Path "$env:USERPROFILE\Downloads\CampusSmartParking_Assignment2"
 ```
 
-### Compile Q1 (Task 01)
+### Task 01: String, StringBuilder and StringBuffer Benchmark (Q1)
 ```powershell
+# Compile
 javac -Xlint:all -d Task01_StringBenchmark/out Task01_StringBenchmark/src/Q1TicketBenchmark.java
+
+# Run
+java -cp Task01_StringBenchmark/out Q1TicketBenchmark
 ```
 
-### Run Q1 Benchmark
+### Task 02: ArrayList vs LinkedList Collections Comparison (Q2)
 ```powershell
-java -cp Task01_StringBenchmark/out Q1TicketBenchmark
+# Compile
+javac -Xlint:all -d Task02_CollectionsComparison/out Task02_CollectionsComparison/src/Q2PlaylistBenchmark.java
+
+# Run
+java -cp Task02_CollectionsComparison/out Q2PlaylistBenchmark
+```
+
+### Task 03: HashSet and the hashCode-equals Contract (Q3)
+```powershell
+# Compile
+javac -Xlint:all -d Task03_HashSet_Student/out Task03_HashSet_Student/src/Q3HashSetAttendance.java
+
+# Run
+java -cp Task03_HashSet_Student/out Q3HashSetAttendance
 ```
 
 ---
 
-## 4. Q1 Benchmark Summary: Railway E-Ticket Generation
+## 4. Benchmark Summaries
 
-Task 01 investigates text assembly performance for a high-volume railway e-ticket system across three implementations:
-1. `String (+)`: Naive concatenation inside loops.
-2. `StringBuilder`: Unsynchronized, mutable buffer.
-3. `StringBuffer`: Synchronized, thread-safe mutable buffer.
-
-### Experimental Evidence Summary (from `Task01_StringBenchmark/data/benchmark_results.csv`)
+### Q1 Summary: Railway E-Ticket Generation (String vs StringBuilder vs StringBuffer)
+- **Source:** [`Task01_StringBenchmark/src/Q1TicketBenchmark.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task01_StringBenchmark/src/Q1TicketBenchmark.java)
+- **Analysis:** [`Task01_StringBenchmark/Q1_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task01_StringBenchmark/Q1_Analysis.md)
+- **Data:** [`Task01_StringBenchmark/data/benchmark_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task01_StringBenchmark/data/benchmark_results.csv)
 
 | Workload | Method | Warmup (ms) | 5-Run Avg (ms) | Intermediate Objects | Final Output Strings | Approx Mem Delta (KB)* |
 |---|---|---|---|---|---|---|
@@ -116,12 +141,32 @@ Task 01 investigates text assembly performance for a high-volume railway e-ticke
 | | `StringBuilder` | 17.6843 | **5.8543** | 0 | 1,000 | 37,376.00 |
 | | `StringBuffer` | 19.1546 | **5.0315** | 0 | 1,000 | 37,376.00 |
 
-*\*Note: Process-wide heap memory delta via `Runtime` is an approximate engineering indicator subject to JVM garbage collection cycles and background daemon threads.*
+- **Key Takeaways:** Repeated `+` exhibits $O(n^2)$ character copying and creates 490,000 temporary intermediate objects in Workload B. `StringBuilder` operates in $O(n)$ with 0 intermediate objects, running **~25× faster** on deep chains. Multithreaded logging verified 1,000 complete atomic records to a shared `StringBuffer` via thread-local `StringBuilder` formatting.
 
-### Key Takeaways
-- **Algorithmic Complexity:** Repeated `+` concatenation copies accumulated characters on each iteration, exhibiting quadratic $O(n^2)$ behavior. `StringBuilder` uses an internal expandable buffer with amortized $O(1)$ appends, delivering linear $O(n)$ performance (**~25× faster** on deep 100-field chains).
-- **Object Churn Elimination:** In Workload B, `String (+)` generated **490,000 temporary intermediate String objects**, creating severe young-gen heap turnover. `StringBuilder` created **0 intermediate String objects**.
-- **Multithreaded Shared Logging:** Demonstrated a multi-threaded architecture with 10 worker threads producing 1,000 tickets. Each thread assembled records locally with thread-confined `StringBuilder`, writing complete atomic entries to a shared synchronized `StringBuffer`. Exactly **1,000 uncorrupted records** were written in 17 ms.
+---
+
+### Q2 Summary: Music Playlist Editor (ArrayList vs LinkedList vs ArrayDeque)
+- **Source:** [`Task02_CollectionsComparison/src/Q2PlaylistBenchmark.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task02_CollectionsComparison/src/Q2PlaylistBenchmark.java)
+- **Analysis:** [`Task02_CollectionsComparison/Q2_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task02_CollectionsComparison/Q2_Analysis.md)
+- **Data:** [`Task02_CollectionsComparison/data/Q2_benchmark_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task02_CollectionsComparison/data/Q2_benchmark_results.csv)
+
+| Playlist Size | Operation | ArrayList Avg (ms) | LinkedList Avg (ms) | Speedup Ratio & Verdict |
+|---|---|---|---|---|
+| **10,000 Songs** | Insert at Front | 2.7359 | **0.2199** | **LinkedList is 12.44× faster** ($O(1)$ head link vs $O(N)$ shift) |
+| | Remove from Front | 2.6332 | **0.0668** | **LinkedList is 39.39× faster** |
+| | Insert in Middle | **1.4757** | 22.2449 | **ArrayList is 15.07× faster** (fast arraycopy vs $O(N)$ traversal) |
+| | Remove from Middle| **0.4782** | 13.4785 | **ArrayList is 28.18× faster** |
+| | Get $k$-th Element | **0.1225** | 7.4986 | **ArrayList is 61.19× faster** ($O(1)$ index vs $O(N)$ traversal) |
+| **100,000 Songs**| Insert at Front | 17.9072 | **0.1106** | **LinkedList is 161.94× faster** |
+| | Remove from Front | 14.7259 | **0.0812** | **LinkedList is 181.26× faster** |
+| | Insert in Middle | **6.5491** | 129.4361 | **ArrayList is 19.76× faster** |
+| | Remove from Middle| **21.2797** | 150.6670 | **ArrayList is 7.08× faster** |
+| | Get $k$-th Element | **0.7406** | 112.4562 | **ArrayList is 151.84× faster** |
+
+- **Key Takeaways:**
+  - `ArrayList` dominates for random access (**~152× faster** at 100k scale) and middle modifications (**~20× faster** at 100k scale because `LinkedList` must traverse $N/2$ nodes).
+  - `LinkedList` only outperforms `ArrayList` when strictly inserting/removing at index 0 ($O(1)$ vs array shifting).
+  - **Changed Condition:** An "Up Next" queue implemented with `ArrayDeque` delivers $O(1)$ insertions and removals at both ends without array shifting or node allocation overhead, making `ArrayDeque` the superior choice for double-ended queues.
 
 ---
 
@@ -130,7 +175,7 @@ Task 01 investigates text assembly performance for a high-volume railway e-ticke
 | Task ID | Assessed Area | Bloom's Level | Marks | Status |
 |---|---|---|---|---|
 | **Q1** | String, StringBuilder & StringBuffer (Railway E-Ticket) | K4 – Analyse | 6 | **COMPLETED** |
-| **Q2** | ArrayList, LinkedList & ArrayDeque (Music Playlist Editor) | K4 – Analyse | 4 | *PENDING* |
+| **Q2** | ArrayList, LinkedList & ArrayDeque (Music Playlist Editor) | K4 – Analyse | 4 | **COMPLETED** |
 | **Q3** | HashSet & the hashCode–equals Contract (Event Attendance) | K4 – Analyse | 6 | *PENDING* |
 | **Q4** | HashMap, TreeMap & LinkedHashMap (Pharmacy Inventory) | K4 – Analyse | 6 | *PENDING* |
 | **Q5** | Generics, Comparable & Comparator (Sports Leaderboard) | K4 – Analyse | 7 | *PENDING* |

@@ -134,21 +134,103 @@ To resolve the architectural question of how text construction behaves in a conc
 
 ---
 
-## Question 2: When Is ArrayList an Appropriate Engineering Choice? (4 Marks) — [PENDING]
+## Question 2: When Is ArrayList an Appropriate Engineering Choice? (4 Marks)
 
 **Bloom's Taxonomy Level:** K4 – Analyse  
-**Context:** Music Streaming Playlist Editor  
-**Status:** *Pending Implementation*
+**Context:** Music Streaming Playlist Editor & "Up Next" Queue  
+**Status:** **COMPLETED**
 
-### Problem Scope
-A music streaming app manages playlists where users append songs at the end, insert/delete at arbitrary positions, jump directly to the $k$-th song, and iterate through playlists. The assignment requires:
-- Experimental comparison of `ArrayList` vs `LinkedList` across three playlist sizes for:
-  - Add at end (amortized $O(1)$ vs $O(1)$)
-  - Insert/remove at front and middle ($O(n)$ shift vs $O(1)$ pointer update after $O(n)$ traversal)
-  - Random access to the $k$-th element ($O(1)$ index lookup vs $O(n)$ node traversal)
-  - Full list sequential iteration
-- Operating boundary determination: defining when `ArrayList` is an appropriate engineering choice and when it should be replaced.
-- Changed Condition: evaluating `ArrayDeque` for an "Up Next" queue supporting efficient insertions at both ends and front removals.
+### 2.1 Problem Scope & Engineering Context
+A commercial music-streaming application enables users to manage digital playlists. Real-world usage involves appending tracks, inserting or removing tracks at index 0 (play next / current song completion), inserting and deleting in the middle (curation), random-access lookup by track number ($k$-th element), and linear streaming playback (complete list iteration).
+
+The benchmark contrasts `java.util.ArrayList<Song>` and `java.util.LinkedList<Song>` across three dataset sizes ($1,000$, $10,000$, and $100,000$ songs) to establish clear empirical operating boundaries.
+
+### 2.2 Theoretical Complexity Matrix
+
+| Operation | `ArrayList<Song>` | `LinkedList<Song>` | `ArrayDeque<Song>` | Plain Array with Manual Shift |
+|---|---|---|---|---|
+| **Add at End** | Amortized $O(1)$ | $O(1)$ | Amortized $O(1)$ | $O(1)$ until full, then $O(N)$ realloc |
+| **Insert at Front** | $O(N)$ (shifts all elements right) | $O(1)$ (prepends head node) | Amortized $O(1)$ (head decrement) | $O(N)$ manual right-shift |
+| **Remove from Front** | $O(N)$ (shifts all elements left) | $O(1)$ (unlinks head node) | $O(1)$ (head increment) | $O(N)$ manual left-shift |
+| **Insert in Middle** | $O(1)$ lookup + $O(N)$ shift | $O(N)$ traversal + $O(1)$ splice | Not Supported / $O(N)$ | $O(1)$ lookup + $O(N)$ shift |
+| **Remove from Middle** | $O(1)$ lookup + $O(N)$ shift | $O(N)$ traversal + $O(1)$ unlink | Not Supported / $O(N)$ | $O(1)$ lookup + $O(N)$ shift |
+| **Get $k$-th Element** | $O(1)$ (direct array offset) | $O(N)$ (bidirectional traversal) | Not Supported ($O(N)$ walk) | $O(1)$ (direct index) |
+| **Iterate Complete List**| $O(N)$ (contiguous memory) | $O(N)$ (scattered node traversal)| $O(N)$ (circular array walk) | $O(N)$ (pointer walk) |
+| **Memory per Element** | 4 to 8 bytes (reference slot) | ~24 to 32 bytes (Node object + refs) | 4 to 8 bytes (reference slot) | 4 to 8 bytes (reference slot) |
+
+---
+
+### 2.3 Empirical Benchmark Results
+
+Measured on **OpenJDK 27** using `System.nanoTime()` with **1 warm-up run** and **5 measured repetitions**. Results from `Task02_CollectionsComparison/data/Q2_benchmark_results.csv`:
+
+| Playlist Size | Operation | ArrayList Avg (ms) | LinkedList Avg (ms) | Speedup Ratio & Verdict |
+|---|---|---|---|---|
+| **1,000 Songs** | Add at End | 0.2375 | 0.2408 | Comparable performance (0.24 ms vs 0.24 ms) |
+| | Insert at Front (1,000 ops) | 0.4534 | 1.0683 | ArrayList is 2.36× faster (JIT/allocation overhead in LL) |
+| | Remove from Front (1,000 ops) | 0.1425 | 0.9163 | ArrayList is 6.43× faster |
+| | Insert in Middle (1,000 ops) | 0.2518 | 2.8939 | **ArrayList is 11.49× faster** |
+| | Remove from Middle (1,000 ops)| 0.1818 | 0.4929 | ArrayList is 2.71× faster |
+| | Get $k$-th Element (1,000 ops) | 0.1076 | 2.4435 | **ArrayList is 22.70× faster** |
+| | Iterate Complete List | 0.1963 | 0.1193 | Comparable performance |
+| **10,000 Songs** | Add at End | 3.7094 | 4.9983 | ArrayList is 1.35× faster |
+| | Insert at Front (1,000 ops) | 2.7359 | 0.2199 | **LinkedList is 12.44× faster** |
+| | Remove from Front (1,000 ops) | 2.6332 | 0.0668 | **LinkedList is 39.39× faster** |
+| | Insert in Middle (1,000 ops) | 1.4757 | 22.2449 | **ArrayList is 15.07× faster** |
+| | Remove from Middle (1,000 ops)| 0.4782 | 13.4785 | **ArrayList is 28.18× faster** |
+| | Get $k$-th Element (1,000 ops) | 0.1225 | 7.4986 | **ArrayList is 61.19× faster** |
+| | Iterate Complete List | 2.2671 | 1.7295 | Comparable performance |
+| **100,000 Songs**| Add at End | 15.8450 | 6.3946 | LinkedList is 2.48× faster (no array resizing) |
+| | Insert at Front (1,000 ops) | 17.9072 | 0.1106 | **LinkedList is 161.94× faster** |
+| | Remove from Front (1,000 ops) | 14.7259 | 0.0812 | **LinkedList is 181.26× faster** |
+| | Insert in Middle (1,000 ops) | 6.5491 | 129.4361 | **ArrayList is 19.76× faster** |
+| | Remove from Middle (1,000 ops)| 21.2797 | 150.6670 | **ArrayList is 7.08× faster** |
+| | Get $k$-th Element (1,000 ops) | 0.7406 | 112.4562 | **ArrayList is 151.84× faster** |
+| | Iterate Complete List | 4.3671 | 4.6008 | Comparable performance (4.37 ms vs 4.60 ms) |
+
+---
+
+### 2.4 Operating Boundaries & Deep-Dive Analysis
+
+1. **Front Insertions & Deletions (Where LinkedList Excels):**
+   - At $N = 100,000$, `ArrayList` shifts up to 100,000 reference slots per insert, executing 1,000 front insertions in **17.91 ms**.
+   - `LinkedList` prepends head nodes in $O(1)$ time, taking **0.11 ms** (**~162× faster**).
+2. **Middle Modifications (Why ArrayList Defeats LinkedList):**
+   - In `LinkedList`, finding index 50,000 requires traversing 50,000 node pointers from the nearest end ($O(N)$ pointer hops). 1,000 middle insertions took **129.44 ms**.
+   - In `ArrayList`, index 50,000 is an immediate $O(1)$ memory calculation. `System.arraycopy` transfers memory blocks in contiguous cache lines in **6.55 ms** (**~20× faster**).
+3. **Random Access (The Fatal Flaw of LinkedList):**
+   - Accessing random tracks by index took **0.74 ms** in `ArrayList` ($O(1)$ array offset) versus **112.46 ms** in `LinkedList` (**~152× slower**), because linked nodes must be sequentially chased through fragmented heap memory.
+
+---
+
+### 2.5 Changed Condition: "Up Next" Queue via ArrayDeque
+When an "Up Next" queue is introduced, tracks are dynamically added at both ends (`addLast`, `addFirst`) and dequeued from the front (`pollFirst`).
+
+**Verification Output:**
+```text
+Playback sequence (pollFirst):
+  Now Playing: P01 - Breaking News / Live Anthem [Broadcaster, 60s]
+  Now Playing: P02 - Listener Request Priority [DJ, 180s]
+  Now Playing: S01 - Midnight Melody [Aria, 210s]
+  Now Playing: S02 - Sunrise Beat [Echo, 195s]
+  Now Playing: S03 - Acoustic Breeze [Nova, 240s]
+
+SUCCESS: ArrayDeque preserved expected double-ended playback order.
+```
+
+**Why ArrayDeque is the Superior Architectural Choice:**
+- `ArrayDeque` uses an internal circular array with bitwise wrapping.
+- Both head and tail insertions and deletions execute in **amortized $O(1)$ time without element shifting**.
+- Unlike `LinkedList`, `ArrayDeque` creates **zero wrapper Node objects**, eliminating GC allocation churn and reducing heap memory footprint by ~70%.
+
+---
+
+### 2.6 Architectural Recommendation
+- **Standard Playlists:** Use **`ArrayList<Song>`**. It provides instant $O(1)$ random access, superior middle editing throughput, cache-line prefetching, and minimal memory usage.
+- **Up Next / Play Queues:** Use **`ArrayDeque<Song>`**. It replaces both `ArrayList` (no $O(N)$ front shifts) and `LinkedList` (no node allocation overhead).
+- **Avoid `LinkedList`:** Modern JVM architectures heavily penalize non-contiguous memory traversals, making `LinkedList` an anti-pattern for virtually all production playlist workflows.
+
+*Detailed derivations and plain-array comparisons are documented in [`Task02_CollectionsComparison/Q2_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task02_CollectionsComparison/Q2_Analysis.md).*
 
 ---
 

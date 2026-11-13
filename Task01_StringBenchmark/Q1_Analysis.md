@@ -63,15 +63,15 @@ All benchmarks were executed on **JDK 27** using `System.nanoTime()` with **1 JI
 
 | Workload | Method | Warmup (ms) | Run 1 (ms) | Run 2 (ms) | Run 3 (ms) | Run 4 (ms) | Run 5 (ms) | **Average (ms)** | **Est. Intermediate Objects** | **Approx. Mem Delta (KB)** |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **A (1 × 6)** | `String (+)` | 0.2175 | 0.0403 | 0.0372 | 0.0342 | 0.0333 | 0.0326 | **0.0355** | 5 | 0.00 |
-| | `StringBuilder` | 0.2244 | 0.0150 | 0.0079 | 0.0066 | 0.0065 | 0.0066 | **0.0085** | 0 | 0.00 |
-| | `StringBuffer` | 0.3233 | 0.0407 | 0.0293 | 0.0295 | 0.0311 | 0.0301 | **0.0321** | 0 | 0.00 |
-| **B (10k × 50)** | `String (+)` | 321.8589 | 377.3470 | 103.0660 | 106.6477 | 102.9190 | 104.0027 | **158.7965** | 490,000 | 147,650.09 |
-| | `StringBuilder` | 55.9510 | 19.6229 | 21.1606 | 20.7089 | 21.5241 | 24.8049 | **21.5643** | 0 | 11,778.00 |
-| | `StringBuffer` | 72.8546 | 37.3736 | 27.7928 | 27.4255 | 26.3932 | 30.9509 | **29.9872** | 0 | 12,290.00 |
-| **C (1k × 100)**| `String (+)` | 83.0794 | 66.9079 | 83.9098 | 80.4247 | 52.2244 | 34.1991 | **63.5332** | 99,000 | 156,674.00 |
-| | `StringBuilder` | 2.9776 | 3.4130 | 12.0660 | 4.8629 | 7.4814 | 5.7456 | **6.7138** | 0 | 37,376.00 |
-| | `StringBuffer` | 2.7417 | 6.4749 | 4.9834 | 3.1493 | 3.2015 | 5.8437 | **4.7306** | 0 | 37,376.00 |
+| **A (1 × 6)** | `String (+)` | 0.6533 | 0.1649 | 0.1611 | 0.2380 | 0.1574 | 0.4677 | **0.2378** | 5 | 0.00 |
+| | `StringBuilder` | 0.2954 | 0.0325 | 0.0220 | 0.0215 | 0.0219 | 0.0240 | **0.0244** | 0 | 0.00 |
+| | `StringBuffer` | 0.2150 | 0.0204 | 0.0138 | 0.0132 | 0.0135 | 0.0129 | **0.0148** | 0 | 0.00 |
+| **B (10k × 50)** | `String (+)` | 282.5433 | 329.0104 | 73.1604 | 75.9985 | 69.8045 | 388.2437 | **187.2435** | 490,000 | 147,655.27 |
+| | `StringBuilder` | 48.4824 | 19.9645 | 19.7233 | 19.1334 | 74.1077 | 91.0032 | **44.7864** | 0 | 194,048.00 |
+| | `StringBuffer` | 75.2604 | 25.5246 | 29.2710 | 22.1592 | 25.6770 | 24.2890 | **25.3842** | 0 | 194,048.00 |
+| **C (1k × 100)**| `String (+)` | 27.5324 | 29.2110 | 143.7890 | 187.8862 | 194.4885 | 194.1392 | **149.9028** | 99,000 | 520,192.00 |
+| | `StringBuilder` | 17.6843 | 12.3452 | 4.4284 | 6.1845 | 3.4082 | 2.9051 | **5.8543** | 0 | 37,376.00 |
+| | `StringBuffer` | 19.1546 | 8.7846 | 4.3096 | 3.5092 | 5.2772 | 3.2771 | **5.0315** | 0 | 37,376.00 |
 
 > **Note on Process-Wide Heap Memory Readings:**  
 > Heap memory measurements obtained via `Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()` capture **approximate process-wide heap usage** at two snapshot instants, rather than isolated, exact per-method allocations. These readings reflect the overall state of the JVM heap and are subject to JVM safepoints, background runtime daemon activity, class metadata management, and asynchronous garbage collection sweeps.
@@ -98,7 +98,7 @@ $$\text{Total Copies} = \sum_{k=1}^{n} k \cdot L = L \sum_{k=1}^{n} k = L \cdot 
 
 For $T$ tickets, total time complexity is $O(T \cdot n^2)$.
 - In Workload C ($n = 100$), $\frac{100 \times 101}{2} = 5,050$ character copies per ticket.
-- For 1,000 tickets, this incurs over **5,050,000 character copies**, explaining why `String (+)` took **63.53 ms** for 1,000 tickets compared to single-digit milliseconds for `StringBuilder` and `StringBuffer`.
+- For 1,000 tickets, this incurs over **5,050,000 character copies**, explaining why `String (+)` took **149.90 ms** for 1,000 tickets compared to single-digit milliseconds for `StringBuilder` and `StringBuffer`.
 
 ### 5.2 Derivation of StringBuilder: $O(n)$
 `StringBuilder` maintains an internal `char[]` (or `byte[]` in modern Java Compact Strings) and an integer `count`.
@@ -109,7 +109,7 @@ For $T$ tickets, total time complexity is $O(T \cdot n^2)$.
 $$\text{Total Copies} = n \cdot L + \sum \text{resizing copies} \le 3 \cdot n \cdot L \in O(n)$$
 
 For $T$ tickets, total time complexity is $O(T \cdot n)$.
-- In Workload C ($n = 100$), `StringBuilder` executed in **6.71 ms** — roughly **9.5× faster** than `String (+)`.
+- In Workload C ($n = 100$), `StringBuilder` executed in **5.85 ms** — approximately **25× faster** than `String (+)`.
 
 ### 5.3 Space Complexity and Rigorous Object Count Distinctions
 
@@ -134,7 +134,7 @@ It is essential to distinguish between **intermediate temporary String objects**
 ## 6. Analysis of Performance and Measurement Variability
 
 ### 6.1 Understanding StringBuilder vs StringBuffer Timing
-In Workload B, `StringBuilder` averaged $21.56\text{ ms}$ while `StringBuffer` averaged $29.99\text{ ms}$. In Workload C, `StringBuilder` averaged $6.71\text{ ms}$ and `StringBuffer` averaged $4.73\text{ ms}$.
+In Workload B, `StringBuilder` averaged $44.79\text{ ms}$ while `StringBuffer` averaged $25.38\text{ ms}$. In Workload C, `StringBuilder` averaged $5.85\text{ ms}$ and `StringBuffer` averaged $5.03\text{ ms}$.
 
 **Important Engineering Clarification:**  
 One cannot conclude that `StringBuffer` is generally faster than `StringBuilder` based on these five measurements. Theoretically:
@@ -239,8 +239,8 @@ public static String buildWithFormat(String[] fields) {
 
 ## 9. Summary of Evidence and Conclusions
 
-1. **Prediction Validated:** In single small tickets (Workload A), the absolute time differences are trivial (0.035 ms vs 0.008 ms). However, under load (Workloads B & C), `String (+)` degrades heavily due to quadratic $O(n^2)$ character copying and the allocation of hundreds of thousands of intermediate heap objects (490,000 objects in Workload B).
-2. **Speedup Magnitude:** For deep field chains (Workload C), `StringBuilder` executed in **6.71 ms** compared to **63.53 ms** for `String (+)`, achieving an approximate **9.5× speedup**.
+1. **Prediction Validated:** In single small tickets (Workload A), the absolute time differences are minimal (0.238 ms vs 0.024 ms). However, under load (Workloads B & C), `String (+)` degrades heavily due to quadratic $O(n^2)$ character copying and the allocation of hundreds of thousands of intermediate heap objects (490,000 objects in Workload B).
+2. **Speedup Magnitude:** For deep field chains (Workload C), `StringBuilder` executed in **5.85 ms** compared to **149.90 ms** for `String (+)`, achieving an approximate **25× speedup**.
 3. **Engineering Verdict:** 
    - Never use `+` concatenation inside loops for structured text generation.
    - Use `StringBuilder` for local ticket formatting (thread-confined, maximum single-threaded performance).

@@ -170,13 +170,37 @@ java -cp Task03_HashSet_Student/out Q3HashSetAttendance
 
 ---
 
+### Q3 Summary: College Fest Event Attendance De-Duplication (HashSet & hashCode-equals)
+- **Source:** [`Task03_HashSet_Student/src/Q3HashSetAttendance.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task03_HashSet_Student/src/Q3HashSetAttendance.java)
+- **Analysis:** [`Task03_HashSet_Student/Q3_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task03_HashSet_Student/Q3_Analysis.md)
+- **Data:** [`Task03_HashSet_Student/data/Q3_benchmark_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task03_HashSet_Student/data/Q3_benchmark_results.csv)
+
+| Suite | Scenario | Input | Set Size | Duplicates Blocked? | Notes |
+|---|---|---|---|---|---|
+| A — BrokenStudent | Same reference reused | 2 | 1 | ✅ yes | Accidental correctness (same identity hash) |
+| B — BrokenStudent | Distinct objects, same regNo | 5 | **5** | ❌ **NO — BUG** | Identity hashes differ; duplicates leak |
+| C — FixedStudent | Distinct objects, same regNo | 6 | **4** | ✅ yes | `Objects.hash(regNo)` ensures consistent bucket |
+| D — Mutable Key | regNo mutated post-insert | 1 | 1 | ⚠ Object Lost | `contains()` returns false; object trapped in old bucket |
+
+**Scale Benchmark (FixedStudent, 1 Warm-up + 5 Measured Runs):**
+
+| Attendance Scale | Add (ms) | Contains-Hit (ms) | Contains-Miss (ms) | Remove (ms) |
+|---|---|---|---|---|
+| **1,000 Students** | 0.9929 | 0.4209 | 0.4108 | 0.4529 |
+| **10,000 Students** | 12.1133 | 1.7674 | 3.7801 | 6.5940 |
+| **100,000 Students** | 33.2265 | 19.8672 | 24.9835 | 9.5958 |
+
+- **Key Takeaways:** Overriding `equals` without `hashCode` is a critical silent defect — duplicates bypass detection because unequal hashes route identical records to separate buckets. `Objects.hash(regNo)` fully enforces the contract. Mutable keys corrupt internal bucket indexing. `HashSet` maintains near-$O(1)$ scaling across all tested operations.
+
+---
+
 ## 5. Task Implementation Status
 
 | Task ID | Assessed Area | Bloom's Level | Marks | Status |
 |---|---|---|---|---|
 | **Q1** | String, StringBuilder & StringBuffer (Railway E-Ticket) | K4 – Analyse | 6 | **COMPLETED** |
 | **Q2** | ArrayList, LinkedList & ArrayDeque (Music Playlist Editor) | K4 – Analyse | 4 | **COMPLETED** |
-| **Q3** | HashSet & the hashCode–equals Contract (Event Attendance) | K4 – Analyse | 6 | *PENDING* |
+| **Q3** | HashSet & the hashCode–equals Contract (Event Attendance) | K4 – Analyse | 6 | **COMPLETED** |
 | **Q4** | HashMap, TreeMap & LinkedHashMap (Pharmacy Inventory) | K4 – Analyse | 6 | *PENDING* |
 | **Q5** | Generics, Comparable & Comparator (Sports Leaderboard) | K4 – Analyse | 7 | *PENDING* |
 | **Q6** | Queue & PriorityQueue (Hospital Emergency Triage) | K5 – Evaluate | 8 | *PENDING* |

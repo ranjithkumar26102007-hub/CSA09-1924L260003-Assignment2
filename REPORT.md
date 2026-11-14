@@ -234,20 +234,94 @@ SUCCESS: ArrayDeque preserved expected double-ended playback order.
 
 ---
 
-## Question 3: Engineer the hashCode–equals Contract (6 Marks) — [PENDING]
+## Question 3: Engineer the hashCode–equals Contract (6 Marks) — [COMPLETED]
 
 **Bloom's Taxonomy Level:** K4 – Analyse  
 **Context:** College Fest Event Attendance De-Duplication  
-**Status:** *Pending Implementation*
+**Source Code:** [`Task03_HashSet_Student/src/Q3HashSetAttendance.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task03_HashSet_Student/src/Q3HashSetAttendance.java)  
+**Analysis:** [`Task03_HashSet_Student/Q3_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task03_HashSet_Student/Q3_Analysis.md)  
+**Raw Measurements:** [`Task03_HashSet_Student/data/Q3_benchmark_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task03_HashSet_Student/data/Q3_benchmark_results.csv)
 
-### Problem Scope
-A student attendance scanning system records scans at multiple gates in a `HashSet<Student>` to ensure uniqueness. A faulty `Student` class overrides `equals()` on `regNo` but fails to override `hashCode()`. The assignment requires:
-- Designing three deliberately contrasting test suites:
-  1. Scans where `HashSet` appears to work correctly by coincidence.
-  2. Scans deliberately designed to expose duplicate student entries.
-  3. Edge-case test (e.g., mutating `regNo` after insertion or `TreeSet` inconsistency).
-- Demonstrating the mechanics of hash bucket calculation, hash collision resolution, and why equal objects must possess identical hash codes.
-- Resolving the "Complete the Code" task (`Attendance.java`) and verifying unique student de-duplication.
+---
+
+### 1. Objective & Problem Demonstration
+
+In event attendance scanning, gate readers capture badge scans into a `HashSet<Student>` to de-duplicate student entries in real time based on their unique registration number (`regNo`).
+
+When a class overrides `equals()` without overriding `hashCode()`, it breaks the fundamental Java contract:
+$$\text{If } a.\text{equals}(b) \implies a.\text{hashCode}() == b.\text{hashCode}()$$
+
+Because `HashSet<T>` is backed by a hash table (`HashMap<T, Object>`), insertion occurs in two distinct stages:
+1. **Bucket Selection:** Calculate $h = \text{hashCode}(x)$ and map to bucket index $i = (n - 1) \ \& \ (h \oplus (h \ggg 16))$.
+2. **Bucket Collision Resolution:** Traverse the linked chain (or red-black tree) at bucket $i$, invoking `.equals()` on each candidate.
+
+If two logically equal objects produce different `hashCode()` values, they route to different buckets. The bucket collision check is completely bypassed, and the duplicate leaks into the set silently.
+
+---
+
+### 2. Empirical Verification Across Four Test Suites
+
+#### Suite A — Accidental Correctness Path (`BrokenStudent`)
+- **Setup:** A single instance `BrokenStudent("2024CS001", "Alice")` was inserted twice using the same object reference.
+- **Observed:** Initial size = 1, subsequent `add()` returned `false`, final size = 1.
+- **Analysis:** Because both insertions reference the exact same heap address, `System.identityHashCode(alice)` is identical, directing both operations to the same bucket. The reference identity check `if (this == o) return true;` inside `equals()` resolved the duplicate. This creates a dangerous illusion of correctness in unit tests where references are inadvertently reused.
+
+#### Suite B — Deliberate Duplicate Exposure (`BrokenStudent`)
+- **Setup:** 5 scan events simulating separate barcode scanners creating fresh `BrokenStudent` instances:
+  - `Alice` (`2024CS001`), `Bob` (`2024CS002`), `Alice` (`2024CS001` - scan 2), `Carol` (`2024CS003`), `Bob` (`2024CS002` - scan 2).
+- **Expected Unique:** 3 (`Alice`, `Bob`, `Carol`).
+- **Observed Set Size:** **5** (Duplicates completely unblocked).
+- **Bucket-Level Root Cause:**
+  - `Alice` Scan 1: `regNo=2024CS001`, `identityHashCode = 865113938`
+  - `Alice` Scan 2: `regNo=2024CS001`, `identityHashCode = 1028566121`
+  - Because $865113938 \neq 1028566121$, the two scans landed in separate hash buckets. `equals()` was never evaluated between them.
+
+#### Suite C — Corrected Contract Enforcement (`FixedStudent`)
+- **Implementation:** Both `equals()` and `hashCode()` consistently derived using `regNo`:
+  ```java
+  @Override
+  public boolean equals(Object o) {
+      if (this == o) return true;
+      if (!(o instanceof FixedStudent)) return false;
+      return regNo.equals(((FixedStudent) o).regNo);
+  }
+
+  @Override
+  public int hashCode() {
+      return Objects.hash(regNo);
+  }
+  ```
+- **Observed Set Size:** **4** out of 6 total scans across 4 distinct registration numbers.
+- **Verification:** Computed hash code for `2024CS001` was identically `555763424` across all separate instances, guaranteeing identical bucket placement and triggering correct duplicate rejection.
+
+#### Suite D — Mutable Key Trap
+- **Setup:** `FixedStudent("2024CS005", "Eve")` added to set (`size = 1`, `contains = true`). Then, `eve.regNo` was mutated to `"2024CS999"`.
+- **Observed:**
+  - `hashCode` shifted from `555763428` $\rightarrow$ `555772360`.
+  - `contains(eve)` returned **`false`**, while `set.size()` remained **`1`**.
+- **Analysis:** The element remains physically lodged in the bucket computed from its pre-mutation hash code. Calling `contains(eve)` searches the bucket determined by its *new* hash code. The object becomes an unfindable, un-removable ghost entry within the set.
+
+---
+
+### 3. Scale Benchmark Results (`FixedStudent`)
+
+Benchmarked using 1 warm-up iteration and 5 timed runs (`System.nanoTime()`), pre-sizing the `HashSet` to isolate core operation latency from array resizing costs:
+
+| Attendance Scale ($N$) | Add All (ms) | Contains Hit (ms) | Contains Miss (ms) | Remove All (ms) | Final Set Size |
+|---|---|---|---|---|---|
+| **1,000 Students** | 0.9929 | 0.4209 | 0.4108 | 0.4529 | 1,000 |
+| **10,000 Students** | 12.1133 | 1.7674 | 3.7801 | 6.5940 | 10,000 |
+| **100,000 Students** | 33.2265 | 19.8672 | 24.9835 | 9.5958 | 100,000 |
+
+*All times represent arithmetic averages over 5 measured runs. Correctness assertions passed on all scales.*
+
+---
+
+### 4. Architectural Findings & Engineering Recommendations
+
+1. **Mandatory Contract Rule:** Never override `equals()` without overriding `hashCode()`. Any violation completely invalidates the correctness of hashed collections (`HashSet`, `HashMap`, `LinkedHashSet`).
+2. **Key Immutability:** All fields participating in `hashCode()` and `equals()` calculations must be declared `final`. Modifying a key after insertion corrupts internal hash bucket addressing.
+3. **Collision Resistance:** `Objects.hash()` or a robust prime multiplier ($31 \times h + \text{field.hashCode()}$) ensures uniform distribution across the table, maintaining near-$O(1)$ amortized lookup speeds even with 100,000 active attendance records.
 
 ---
 

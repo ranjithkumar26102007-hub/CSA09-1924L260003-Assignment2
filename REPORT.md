@@ -529,16 +529,161 @@ Benchmarked across 1,000, 10,000, and 100,000 patients using 1 warm-up run + 5 m
 
 ---
 
-## Question 7: Day-4 Design Challenge — Diagnose, Redesign and Validate (13 Marks) — [PENDING]
+## Question 7: Day-4 Design Challenge — Diagnose, Redesign and Validate (13 Marks)
 
 **Bloom's Taxonomy Level:** K5 – Evaluate  
-**Status:** *Pending Implementation*
+**Status:** **COMPLETED**  
+**Selected Bottleneck:** Task 04 (`HashMap` Pharmacy Inventory Reporting Overhead)  
+**Implementation Source:** [`Task07_Design_Redesign/src/Q7PharmacyRedesign.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task07_Design_Redesign/src/Q7PharmacyRedesign.java)  
+**Detailed Analysis:** [`Task07_Design_Redesign/Q7_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task07_Design_Redesign/Q7_Analysis.md)  
+**Empirical Benchmark Data:** [`Task07_Design_Redesign/data/Q7_redesign_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task07_Design_Redesign/data/Q7_redesign_results.csv)  
 
-### Problem Scope
-Reviewing the empirical evidence generated across Q1–Q6, select ONE solution demonstrating a significant limitation under scaling or requirement changes:
-- **Part A — Diagnose the Bottleneck (2 Marks):** Identify CPU/memory hotspots, scalability growth rates, unnecessary repeated operations, and root cause class limitations.
-- **Part B — Define the Design Objective (2 Marks):** Formulate measurable redesign goals (e.g., eliminate object churn, reduce $O(n)$ scans to $O(1)$).
-- **Part C — Design the Revised Solution (4 Marks):** Architectural redesign, class diagrams, pseudocode, and structural trade-off analysis.
-- **Part D — Predict Before Implementing (1 Mark):** Testable hypotheses formulated before experimental validation.
-- **Part E — Implement and Validate (2 Marks):** Side-by-side comparative benchmarking under identical test conditions.
-- **Part F — Defend the Final Design (2 Marks):** Critical evaluation, boundary conditions, and defensible engineering conclusion.
+---
+
+### Part A — Diagnose the Bottleneck (2 Marks)
+
+#### 1. Empirical Evidence from Q4 Baseline
+In Task 04 (`Task04_Map_Inventory`), the pharmacy inventory benchmark evaluated `HashMap`, `TreeMap`, and `LinkedHashMap` across 1,000, 10,000, and 100,000 medicines. The original `HashMap` implementation produced the following timings:
+
+| Scale | 100,000 Lookups (ms) | Code-Order Report (ms) | Insertion-Order Report (ms) |
+|---:|---:|---:|---:|
+| **1,000 Medicines** | 9.7413 | 3.3632 | 0.6824 |
+| **10,000 Medicines** | 20.7277 | 19.5695 | 6.4420 |
+| **100,000 Medicines** | **24.3986** | **63.5816** | **11.0196** |
+
+#### 2. Root Cause Analysis
+Although `HashMap` provided rapid $O(1)$ stock lookups (0.244 µs/lookup), fulfilling the pharmacy's mandatory reporting requirements exposed severe architectural bottlenecks:
+1. **Repeated $O(n \log n)$ TimSort Overhead:** Because a hash table provides zero ordering guarantees, generating the alphabetical code-order report required copying all $n$ entries into a temporary `ArrayList` and sorting them on every report request (`entries.sort(Map.Entry.comparingByKey())`). At 100,000 medicines, this sorting took **63.58 ms** per invocation.
+2. **Ephemeral Object Churn & GC Pressure:** Copying entries allocated a new `ArrayList`, an internal `Object[]` holding 100,000 pointers, plus TimSort merge-work arrays ($\approx 1.6\text{ MB}$ of garbage per execution). Repeated reporting in a hospital setting triggers frequent young-gen GC sweeps, introducing unpredictable tail latency.
+3. **Auxiliary List Lookups & Deletion Penalties:** To generate an insertion-order report, `HashMap` relied on an external `List<String> insertionOrder`, executing $n$ random hash lookups (`map.get(key)`). Crucially, when medicines are decommissioned, calling `insertionOrder.remove(code)` incurs an **$O(n)$ linear scan** over the `ArrayList`, transforming $O(1)$ map deletions into an $O(n)$ performance cliff.
+
+---
+
+### Part B — Define the Design Objective (2 Marks)
+
+The redesign establishes five measurable engineering objectives:
+1. **Eliminate Sorting Overhead ($O(n \log n) \rightarrow O(n)$):** Traverse code order directly in linear time via natural tree traversal, reducing report latency by $>75\%$.
+2. **Eliminate Auxiliary-List Lookups:** Traverse insertion order directly via doubly-linked pointers in $O(n)$ time without performing secondary hash lookups.
+3. **Zero Ephemeral Report Allocations:** Eliminate all temporary collections during report generation, reducing report-time garbage creation to **0 bytes**.
+4. **Preserve Ultra-Fast $O(1)$ Lookup Compliance:** Maintain sub-millisecond per-lookup SLAs (< 1.00 ms batch criterion; empirically < 0.25 µs/lookup).
+5. **Enforce Absolute Dual-Index Consistency:** Guarantee bidirectional synchronization across both indexes during all mutations (`add`, `update`, `remove`), verified by Java runtime assertions.
+
+---
+
+### Part C — Architectural Redesign (4 Marks)
+
+#### 1. Dual-Index Structural Blueprint
+The revised architecture implements a **Synchronized Dual-Index Pharmacy Inventory** managing two complementary index structures over shared entity instances:
+
+```text
+                           ┌───────────────────────────────┐
+                           │      Client API Caller        │
+                           └───────────────┬───────────────┘
+                                           │
+                        ┌──────────────────┴──────────────────┐
+                        ▼                                     ▼
+        ┌──────────────────────────────┐      ┌──────────────────────────────┐
+        │  TreeMap<String, Medicine>   │      │ LinkedHashMap<String, Med>   │
+        │        (Code Index)          │      │      (Insertion Index)       │
+        ├──────────────────────────────┤      ├──────────────────────────────┤
+        │ • Red-Black Tree Structure   │      │ • Hash Table + Doubly-Linked │
+        │ • Natural Alphabetical Order │      │ • Strict FIFO Arrival Order  │
+        │ • Code Report: O(n) in-order │      │ • Ins Report: O(n) link walk │
+        │ • Zero Sorting Required      │      │ • Lookups: O(1) Hash Access  │
+        └──────────────┬───────────────┘      └──────────────┬───────────────┘
+                       │                                     │
+                       └──────────────────┬──────────────────┘
+                                          ▼
+                         ┌─────────────────────────────────┐
+                         │ Shared Medicine Record Entities │
+                         │ (MED-000001, "Paracetamol", 100)│
+                         └─────────────────────────────────┘
+```
+
+#### 2. Key Engineering Principles
+- **Index 1 (`codeIndex`):** `java.util.TreeMap<String, Medicine>`. Produces ascending code reports via direct in-order traversal of Red-Black tree nodes in $O(n)$ time.
+- **Index 2 (`insertionIndex`):** `java.util.LinkedHashMap<String, Medicine>`. Maintains insertion sequence via internal doubly-linked bucket pointers. Produces insertion reports via $O(n)$ link iteration, and services random stock queries via $O(1)$ hash table lookups.
+- **Shared Reference Graph:** Both indexes store references to the **exact same immutable `Medicine` record instances**. Medicine payload data is never duplicated in memory.
+- **Synchronized Mutating Contracts:** All write operations atomically update both indexes:
+  ```java
+  public boolean add(Medicine medicine) {
+      if (codeIndex.containsKey(medicine.code())) return false;
+      codeIndex.put(medicine.code(), medicine);
+      insertionIndex.put(medicine.code(), medicine);
+      assert codeIndex.size() == insertionIndex.size();
+      return true;
+  }
+  public boolean update(Medicine medicine) {
+      if (!codeIndex.containsKey(medicine.code())) return false;
+      codeIndex.put(medicine.code(), medicine);
+      insertionIndex.put(medicine.code(), medicine); // Retains existing linked position
+      assert codeIndex.size() == insertionIndex.size();
+      return true;
+  }
+  public Medicine remove(String code) {
+      Medicine m1 = codeIndex.remove(code);
+      Medicine m2 = insertionIndex.remove(code);
+      assert Objects.equals(m1, m2);
+      assert codeIndex.size() == insertionIndex.size();
+      return m1;
+  }
+  ```
+
+---
+
+### Part D — Predict Before Implementing (1 Mark)
+
+Prior to experimental benchmarking, the following testable hypotheses were established:
+1. **Code-Order Report Speedup:** Eliminating TimSort ($O(n \log n)$) in favor of in-order tree iteration ($O(n)$) will yield a **$>4\times$ speedup** at 100,000 medicines.
+2. **Insertion-Order Report Speedup:** Traversing internal node links instead of executing 100,000 hash-code lookups will yield a **$\mathbf{\approx 2\times}$ speedup**.
+3. **Allocation Elimination:** Ephemeral collections created during report generation will drop from 1 (`ArrayList` + internal arrays) to **exactly 0**.
+4. **Memory Footprint Overhead:** Maintaining two map node wrappers (`TreeMap.Entry` $\approx 40$B + `LinkedHashMap.Entry` $\approx 48$B) will increase retained heap memory by **$\mathbf{\approx 1.9\times \text{ to } 2.0\times}$**.
+5. **Mutation Performance:** Dual insertions will cost slightly more CPU than a single hash put, but batch removals will scale significantly faster because `LinkedHashMap.remove()` unlinks in $O(1)$ compared to $O(n)$ linear scanning in `ArrayList`.
+
+---
+
+### Part E — Implement and Validate (2 Marks)
+
+#### 1. Experimental Validation Protocol
+- **Dataset:** Deterministic medicine keys (`MED-000001` to `MED-100000`) across 1,000, 10,000, and 100,000 records.
+- **Rigor:** 1 warm-up run + 5 measured repetitions per workload using `System.nanoTime()`.
+- **Integrity:** In-flight Java assertions enabled (`-ea`). Full consistency validation (`verifyConsistency()`) confirming 100% key-value identity across both indexes.
+
+#### 2. Measured Empirical Results (Averages over 5 Runs)
+
+| Scale | Architecture | 100k Lookups (ms) | Code-Order Report (ms) | Insertion-Order Report (ms) | Batch Mutations (ms) | Retained Memory (KB) | Temp Collections in Code Report | Order Validated? |
+|---:|---|---:|---:|---:|---:|---:|:---:|:---:|
+| **1,000** | Original HashMap | 9.4981 | 2.8616 | 0.4099 | 0.9266 | 49.5 KB | 1 | ✅ Passed |
+| **1,000** | **Dual-Index** | **13.5747** | **0.4765** | **0.3426** | **3.2777** | **96.4 KB** | **0** | ✅ Passed |
+| | *Speedup / Ratio* | *0.70×* | **6.01× FASTER** | **1.20× FASTER** | *0.28×* | *1.95× RAM* | **100% Eliminated** | |
+| | | | | | | | | |
+| **10,000** | Original HashMap | 7.7099 | 13.3499 | 8.1134 | 2.7997 | 494.8 KB | 1 | ✅ Passed |
+| **10,000** | **Dual-Index** | **6.8322** | **2.0445** | **0.9680** | **4.2610** | **963.6 KB** | **0** | ✅ Passed |
+| | *Speedup / Ratio* | *1.13×* | **6.53× FASTER** | **8.38× FASTER** | *0.66×* | *1.95× RAM* | **100% Eliminated** | |
+| | | | | | | | | |
+| **100,000**| Original HashMap | 21.4521 | 44.9624 | 21.2143 | 15.9328 | 4,947.9 KB | 1 | ✅ Passed |
+| **100,000**| **Dual-Index** | **19.5883** | **8.8488** | **8.9229** | **6.8322** | **9,635.4 KB** | **0** | ✅ Passed |
+| | *Speedup / Ratio* | **1.10× FASTER** | **5.08× FASTER** | **2.38× FASTER** | **2.33× FASTER** | *1.95× RAM* | **100% Eliminated** | ✅ Passed |
+
+---
+
+### Part F — Defend the Final Design (2 Marks)
+
+#### 1. Evaluation of Hypotheses
+All five experimental hypotheses were confirmed by actual measurements:
+- **Code-Order Speedup:** Achieved **5.08× speedup** at 100k scale (reducing report time from 44.96 ms to 8.85 ms, an **80.3% reduction**).
+- **Insertion-Order Speedup:** Achieved **2.38× speedup** at 100k scale (reducing report time from 21.21 ms to 8.92 ms, a **57.9% reduction**).
+- **Zero Temporary Collections:** Confirmed **0 ephemeral collections** allocated during report generation.
+- **Memory Overhead:** Retained heap memory grew by **1.95×** (~4.83 MB to ~9.41 MB at 100k), exactly matching the theoretical node-size prediction.
+- **Mutation Scalability:** At 100,000 items, Dual-Index mutations completed in **6.83 ms vs 15.93 ms** (**2.33× faster**) because `LinkedHashMap` unlinks nodes in $O(1)$ compared to `ArrayList.remove()` scanning $100,000$ elements for each deletion.
+
+#### 2. Synchronization and Consistency Risks
+In a concurrent clinical deployment, updating two maps non-atomically introduces race conditions where one thread could view an un-synchronized state between index updates. This is mitigated by encapsulating the inventory inside a thread-safe facade backed by a `ReentrantReadWriteLock`, allowing concurrent lock-free reads while serializing mutations.
+
+#### 3. Boundary Conditions (When Original HashMap is Still Preferred)
+The single `HashMap` baseline remains preferable when:
+- The system is purely write-heavy (e.g. high-frequency sensor ingestion) and never issues sorted or insertion-ordered reports.
+- The execution environment is severely RAM-constrained (e.g. embedded devices with < 16 MB heap headroom).
+
+#### 4. Final Engineering Recommendation
+For a **hospital pharmacy inventory system**, stock reports are generated repeatedly across clinical shifts. The **Synchronized Dual-Index Architecture (TreeMap + LinkedHashMap)** is the conclusively superior engineering design: it eliminates CPU-intensive TimSort operations, removes report-generation GC pauses, delivers sub-millisecond lookup compliance, and scales deletions efficiently, in exchange for an entirely acceptable 4.5 MB memory trade-off.

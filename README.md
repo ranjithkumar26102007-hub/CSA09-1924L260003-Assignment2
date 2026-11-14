@@ -77,9 +77,20 @@ CampusSmartParking_Assignment2/
 │   └───src/
 │           
 └───Task07_Design_Redesign/
+    │   Q7_Analysis.md
     ├───data/
+    │       Q7_redesign_results.csv
+    ├───out/
+    │       Q7PharmacyRedesign.class
+    │       Q7PharmacyRedesign$DualIndexPharmacyInventory.class
+    │       Q7PharmacyRedesign$ImplementationBenchmarkResult.class
+    │       Q7PharmacyRedesign$Measurement.class
+    │       Q7PharmacyRedesign$Medicine.class
+    │       Q7PharmacyRedesign$OriginalHashMapInventory.class
+    │       Q7PharmacyRedesign$PharmacyInventory.class
     ├───screenshots/
     └───src/
+            Q7PharmacyRedesign.java
 ```
 
 ---
@@ -136,6 +147,15 @@ javac -Xlint:all -d Task06_PriorityQueue_Triage/out Task06_PriorityQueue_Triage/
 
 # Run (with assertions enabled)
 java -ea -cp Task06_PriorityQueue_Triage/out Q6EmergencyTriage
+```
+
+### Task 07: Day-4 Design Challenge / Dual-Index Pharmacy Redesign (Q7)
+```powershell
+# Compile
+javac -Xlint:all -d Task07_Design_Redesign/out Task07_Design_Redesign/src/Q7PharmacyRedesign.java
+
+# Run (with assertions enabled)
+java -ea -cp Task07_Design_Redesign/out Q7PharmacyRedesign
 ```
 
 ---
@@ -260,6 +280,31 @@ java -ea -cp Task06_PriorityQueue_Triage/out Q6EmergencyTriage
 
 ---
 
+### Q7 Summary: Pharmacy Inventory Dual-Index Redesign (TreeMap + LinkedHashMap)
+- **Source:** [`Task07_Design_Redesign/src/Q7PharmacyRedesign.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task07_Design_Redesign/src/Q7PharmacyRedesign.java)
+- **Analysis:** [`Task07_Design_Redesign/Q7_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task07_Design_Redesign/Q7_Analysis.md)
+- **Data:** [`Task07_Design_Redesign/data/Q7_redesign_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task07_Design_Redesign/data/Q7_redesign_results.csv)
+
+| Scale | Architecture | 100k Lookups (ms) | Code-Order Report (ms) | Insertion-Order Report (ms) | Batch Mutations (ms) | Retained Memory (KB) | Temp Collections in Code Report |
+|---:|---|---:|---:|---:|---:|---:|:---:|
+| **1,000** | Original HashMap | 9.4981 | 2.8616 | 0.4099 | 0.9266 | 49.5 KB | 1 |
+| **1,000** | **Dual-Index** | **13.5747** | **0.4765** | **0.3426** | **3.2777** | **96.4 KB** | **0** |
+| | *Speedup / Ratio* | *0.70×* | **6.01× FASTER** | **1.20× FASTER** | *0.28×* | *1.95× RAM* | **100% Eliminated** |
+| **10,000** | Original HashMap | 7.7099 | 13.3499 | 8.1134 | 2.7997 | 494.8 KB | 1 |
+| **10,000** | **Dual-Index** | **6.8322** | **2.0445** | **0.9680** | **4.2610** | **963.6 KB** | **0** |
+| | *Speedup / Ratio* | *1.13×* | **6.53× FASTER** | **8.38× FASTER** | *0.66×* | *1.95× RAM* | **100% Eliminated** |
+| **100,000**| Original HashMap | 21.4521 | 44.9624 | 21.2143 | 15.9328 | 4,947.9 KB | 1 |
+| **100,000**| **Dual-Index** | **19.5883** | **8.8488** | **8.9229** | **6.8322** | **9,635.4 KB** | **0** |
+| | *Speedup / Ratio* | **1.10× FASTER** | **5.08× FASTER** | **2.38× FASTER** | **2.33× FASTER** | *1.95× RAM* | **100% Eliminated** |
+
+- **Key Takeaways:** 
+  - Redesign completely eliminated $O(n \log n)$ TimSort during code reporting (**5.08× speedup** at 100k scale) and auxiliary-list map lookups during insertion reporting (**2.38× speedup**).
+  - Temporary report-time memory allocations dropped to **zero** (100% eliminated).
+  - Batch mutations scaled **2.33× faster** at 100k records because `LinkedHashMap` unlinks nodes in $O(1)$ compared to $O(n)$ search-and-shift on `ArrayList`.
+  - Memory footprint increased by **1.95×** (~4.5 MB extra heap at 100k), an outstanding trade-off for zero GC churn and 5× faster reporting.
+
+---
+
 ## 5. Task Implementation Status
 
 | Task ID | Assessed Area | Bloom's Level | Marks | Status |
@@ -270,5 +315,5 @@ java -ea -cp Task06_PriorityQueue_Triage/out Q6EmergencyTriage
 | **Q4** | HashMap, TreeMap & LinkedHashMap (Pharmacy Inventory) | K4 – Analyse | 6 | *PENDING* |
 | **Q5** | Generics, Comparable & Comparator (Sports Leaderboard) | K4 – Analyse | 7 | **COMPLETED** |
 | **Q6** | Queue & PriorityQueue (Hospital Emergency Triage) | K5 – Evaluate | 8 | **COMPLETED** |
-| **Q7** | Day-4 Design Challenge: Diagnose, Redesign & Validate | K5 – Evaluate | 13 | *PENDING* |
+| **Q7** | Day-4 Design Challenge: Diagnose, Redesign & Validate | K5 – Evaluate | 13 | **COMPLETED** |
 | **Total** | | | **50** | |

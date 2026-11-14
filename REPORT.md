@@ -5,6 +5,7 @@
 ### Candidate & Course Details
 - **Student Name:** Ranjith Kumar.R
 - **Register Number:** 1924L260003
+- **GitHub Repository:** https://github.com/ranjithkumar26102007-hub/CSA09-1924L260003-Assignment2
 - **Degree / Program:** B.Tech Computer Science and Engineering
 - **Course Title:** Programming in Java
 - **Course Outcome:** CO2 (Strings, Regex, Collections Framework, Generics, and Utilities)

@@ -129,6 +129,15 @@ javac -Xlint:all -d Task05_Generics_Leaderboard/out Task05_Generics_Leaderboard/
 java -ea -cp Task05_Generics_Leaderboard/out Q5LeaderboardDemo
 ```
 
+### Task 06: Queue & PriorityQueue / Hospital Emergency Triage (Q6)
+```powershell
+# Compile
+javac -Xlint:all -d Task06_PriorityQueue_Triage/out Task06_PriorityQueue_Triage/src/Q6EmergencyTriage.java
+
+# Run (with assertions enabled)
+java -ea -cp Task06_PriorityQueue_Triage/out Q6EmergencyTriage
+```
+
 ---
 
 ## 4. Benchmark Summaries
@@ -228,6 +237,29 @@ java -ea -cp Task05_Generics_Leaderboard/out Q5LeaderboardDemo
 
 ---
 
+### Q6 Summary: Hospital Emergency Department Triage (PriorityQueue & Fairness)
+- **Source:** [`Task06_PriorityQueue_Triage/src/Q6EmergencyTriage.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task06_PriorityQueue_Triage/src/Q6EmergencyTriage.java)
+- **Analysis:** [`Task06_PriorityQueue_Triage/Q6_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task06_PriorityQueue_Triage/Q6_Analysis.md)
+- **Data:** [`Task06_PriorityQueue_Triage/data/Q6_benchmark_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task06_PriorityQueue_Triage/data/Q6_benchmark_results.csv)
+
+| Test / Scenario | Clinical & Algorithmic Finding | Verification Status |
+|---|---|---|
+| **8-Patient Triage Order** | Priority 1 (Bob, Emma) $\rightarrow$ Priority 2 (David, Grace) $\rightarrow$ Priority 3 (Alice, Henry) $\rightarrow$ Priority 4 (Charlie) $\rightarrow$ Priority 5 (Frank) | ✅ **100% Match** via deterministic arrival tie-breaking |
+| **FIFO Queues Inadequacy** | `LinkedList` and `ArrayDeque` dequeue Alice (Sprained ankle) while Critical Bob is left in waiting room | ✅ **Clinically Unsafe** |
+| **Direct Traversal vs Polling** | `PriorityQueue.toString()` / iterator exposes binary min-heap array ($parent \le children$), placing Charlie ahead of David; only `poll()` extracts in true sorted order | ✅ **Defensive Copying Proven** |
+| **Starvation & Aging** | Frank (Sev 5) starved indefinitely by arriving Sev 2/3 cases; active aging policy (1 boost/30m) promotes Frank to **#1** at $t=120$ | ✅ **Starvation Rescued** post-Floyd reheapification |
+| **5,000 Daily Deployment** | Throughput (<0.001% CPU) and memory (~2 MB) pass easily; requires `PriorityBlockingQueue` for concurrency and WAL for crash persistence | ✅ **Production Decision Documented** |
+
+**Scale Growth Benchmark (1 Warm-up + 5 Measured Runs):**
+
+| Queue Scale | Insert Total (ms) | Insert Avg (µs/op) | Poll Total (ms) | Poll Avg (µs/op) |
+|---|---|---|---|---|
+| **1,000 Patients** | **0.4906** | 0.4906 | **1.0531** | 1.0531 |
+| **10,000 Patients** | **2.6045** | 0.2605 | **5.1884** | 0.5188 |
+| **100,000 Patients** | **12.1351** | 0.1214 | **97.6437** | 0.9764 |
+
+---
+
 ## 5. Task Implementation Status
 
 | Task ID | Assessed Area | Bloom's Level | Marks | Status |
@@ -237,6 +269,6 @@ java -ea -cp Task05_Generics_Leaderboard/out Q5LeaderboardDemo
 | **Q3** | HashSet & the hashCode–equals Contract (Event Attendance) | K4 – Analyse | 6 | **COMPLETED** |
 | **Q4** | HashMap, TreeMap & LinkedHashMap (Pharmacy Inventory) | K4 – Analyse | 6 | *PENDING* |
 | **Q5** | Generics, Comparable & Comparator (Sports Leaderboard) | K4 – Analyse | 7 | **COMPLETED** |
-| **Q6** | Queue & PriorityQueue (Hospital Emergency Triage) | K5 – Evaluate | 8 | *PENDING* |
+| **Q6** | Queue & PriorityQueue (Hospital Emergency Triage) | K5 – Evaluate | 8 | **COMPLETED** |
 | **Q7** | Day-4 Design Challenge: Diagnose, Redesign & Validate | K5 – Evaluate | 13 | *PENDING* |
 | **Total** | | | **50** | |

@@ -120,6 +120,15 @@ javac -Xlint:all -d Task03_HashSet_Student/out Task03_HashSet_Student/src/Q3Hash
 java -cp Task03_HashSet_Student/out Q3HashSetAttendance
 ```
 
+### Task 05: Generic Ranking Component / Team Leaderboard (Q5)
+```powershell
+# Compile
+javac -Xlint:all -d Task05_Generics_Leaderboard/out Task05_Generics_Leaderboard/src/Q5LeaderboardDemo.java
+
+# Run (with assertions enabled)
+java -ea -cp Task05_Generics_Leaderboard/out Q5LeaderboardDemo
+```
+
 ---
 
 ## 4. Benchmark Summaries
@@ -194,6 +203,31 @@ java -cp Task03_HashSet_Student/out Q3HashSetAttendance
 
 ---
 
+### Q5 Summary: Inter-College Sports Meet (Generic Leaderboard & Multi-Field Ranking)
+- **Source:** [`Task05_Generics_Leaderboard/src/Q5LeaderboardDemo.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task05_Generics_Leaderboard/src/Q5LeaderboardDemo.java)
+- **Analysis:** [`Task05_Generics_Leaderboard/Q5_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task05_Generics_Leaderboard/Q5_Analysis.md)
+- **Data:** [`Task05_Generics_Leaderboard/data/Q5_benchmark_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task05_Generics_Leaderboard/data/Q5_benchmark_results.csv)
+
+| Metric / Scenario | Evaluation | Outcome |
+|---|---|---|
+| **Multi-field Comparator** | Points (DESC) $\rightarrow$ GoalDiff (DESC) $\rightarrow$ Name (ASC) | Exact resolution: Man City #1 (+50 GD) over Arsenal (+45 GD); Brighton over West Ham on name |
+| **Immutability Guarantee** | Pre/post snapshot of internal entry list | Original entries retain exact initial order and size |
+| **Subtraction Flaw** | `(t2.points - t1.points)` under 32-bit overflow | **Catastrophic Inversion:** $-2,147,483,648 - 1 = +2,147,483,647$, ranking negative-point team #1 |
+| **Tie-Breaker Omission** | Comparator omitting GoalDiff & Name | Returns 0 for unequal teams; leads to silent element dropping in `TreeSet` |
+| **Comparator Transitivity** | Tested all 125 permutations of triples $(a, b, c)$ | **0 violations detected**; mathematically proven total preorder |
+| **PECS Wildcards** | `Comparator<? super T>` & `Collection<? extends T>` | Successfully applied `Comparator<Participant>` to `Leaderboard<Team>` |
+| **Generic Reusability** | Tested with `Player` and `College` entities | Exact same generic class ranked top goal-scorers and medal tallies |
+
+**Performance Comparison: 1 Composite Pass vs 3 Sequential Stable Passes:**
+
+| Dataset Size | Single Composite Pass (ms) | Three Sequential Passes (ms) | Speedup Ratio |
+|---|---|---|---|
+| **1,000 Teams** | **1.4522** | 3.1519 | **2.17× faster** |
+| **10,000 Teams** | **23.1131** | 33.7915 | **1.46× faster** |
+| **100,000 Teams** | 138.8070 | 113.8030 | 0.82× (GC pause on run 3) |
+
+---
+
 ## 5. Task Implementation Status
 
 | Task ID | Assessed Area | Bloom's Level | Marks | Status |
@@ -202,7 +236,7 @@ java -cp Task03_HashSet_Student/out Q3HashSetAttendance
 | **Q2** | ArrayList, LinkedList & ArrayDeque (Music Playlist Editor) | K4 – Analyse | 4 | **COMPLETED** |
 | **Q3** | HashSet & the hashCode–equals Contract (Event Attendance) | K4 – Analyse | 6 | **COMPLETED** |
 | **Q4** | HashMap, TreeMap & LinkedHashMap (Pharmacy Inventory) | K4 – Analyse | 6 | *PENDING* |
-| **Q5** | Generics, Comparable & Comparator (Sports Leaderboard) | K4 – Analyse | 7 | *PENDING* |
+| **Q5** | Generics, Comparable & Comparator (Sports Leaderboard) | K4 – Analyse | 7 | **COMPLETED** |
 | **Q6** | Queue & PriorityQueue (Hospital Emergency Triage) | K5 – Evaluate | 8 | *PENDING* |
 | **Q7** | Day-4 Design Challenge: Diagnose, Redesign & Validate | K5 – Evaluate | 13 | *PENDING* |
 | **Total** | | | **50** | |

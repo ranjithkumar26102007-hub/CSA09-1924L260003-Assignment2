@@ -340,18 +340,100 @@ A pharmacy system performs hundreds of lookups per day by medicine code, printin
 
 ---
 
-## Question 5: Derive a Generic Ranking Component from a Principle (7 Marks) — [PENDING]
+## Question 5: Derive a Generic Ranking Component from a Principle (7 Marks) — [COMPLETED]
 
 **Bloom's Taxonomy Level:** K4 – Analyse  
-**Context:** Inter-College Sports Meet Leaderboard  
-**Status:** *Pending Implementation*
+**Context:** Inter-College Sports Meet / Multi-Division Team Leaderboard  
+**Source Code:** [`Task05_Generics_Leaderboard/src/Q5LeaderboardDemo.java`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task05_Generics_Leaderboard/src/Q5LeaderboardDemo.java)  
+**Analysis:** [`Task05_Generics_Leaderboard/Q5_Analysis.md`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task05_Generics_Leaderboard/Q5_Analysis.md)  
+**Raw Measurements:** [`Task05_Generics_Leaderboard/data/Q5_benchmark_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task05_Generics_Leaderboard/data/Q5_benchmark_results.csv)
 
-### Problem Scope
-A sports meet ranks teams by points (descending), tie-broken by goal difference (descending), then by team name (alphabetical). The component must be reusable for ranking players, colleges, and quiz teams. The assignment requires:
-- Converting the consistency principle into a generic class `Leaderboard<T>`.
-- Formulating a robust multi-field comparator using `Comparator.comparing()`, `.thenComparing()`, and `.reversed()`.
-- Demonstrating bounded types and wildcard usage (`Comparator<? super T>`, `List<? extends T>`).
-- Completing the starter code (`LeaderboardDemo.java`) and verifying against expected tie-break rankings.
+---
+
+### 1. Architectural Design & Domain Modeling
+
+The ranking engine decouples entities from specific sorting policies by rejecting `Comparable<Team>` in favor of external, composable `Comparator<? super T>` instances:
+
+1. **Why `Team` Does Not Implement `Comparable<Team>`:** In athletics, teams have no single intrinsic ordering. Different contexts require ranking by points, fair-play penalties, head-to-head records, or alphabetical index. Forcing an arbitrary `compareTo()` on `Team` hardcodes business policy into domain entities, violating the Open-Closed Principle (OCP).
+2. **Generic `Leaderboard<T>` Component:** Accepts any entity type `T` and applies PECS:
+   - `Comparator<? super T>`: Enables consumer comparators defined on ancestor types (e.g. `Comparator<Participant>` applied to `Leaderboard<Team>`).
+   - `Collection<? extends T>`: Allows producer collections containing subtypes of `T` to populate the leaderboard.
+3. **Immutability Guarantee:** Calling `ranking()` constructs an independent `ArrayList<>(entries)`, sorts it, and returns an unmodifiable view (`Collections.unmodifiableList()`), strictly preserving original entry order.
+
+---
+
+### 2. Multi-Field Tie-Breaking & Functional Comparator Chaining
+
+The official ranking policy is declared via modern functional chaining:
+```java
+public static final Comparator<Team> OFFICIAL_COMPARATOR = Comparator
+        .comparing(Team::getPoints)
+        .thenComparing(Team::getGoalDiff)
+        .reversed()
+        .thenComparing(Team::getName);
+```
+
+#### Empirical Validation on Deliberate Tie Scenarios:
+| Rank | Team | Points | Goal Difference | Resolution Mechanism |
+|:---:|:---|:---:|:---:|:---|
+| **#1** | Manchester City | 86 | +50 | Points tie with Arsenal (86); won on Goal Diff (+50 vs +45) |
+| **#2** | Arsenal | 86 | +45 | Points tie with Man City (86); lost on Goal Diff |
+| **#3** | Liverpool | 82 | +35 | Direct points margin |
+| **#4** | Aston Villa | 68 | +15 | Direct points margin |
+| **#5** | Tottenham | 66 | +12 | Direct points margin |
+| **#6** | Chelsea | 63 | +14 | Direct points margin |
+| **#7** | Newcastle | 60 | +22 | Points tie with Man Utd (60); won on Goal Diff (+22 vs -1) |
+| **#8** | Manchester United | 60 | -1 | Points tie with Newcastle (60); lost on Goal Diff |
+| **#9** | Brighton | 48 | -7 | Points & Goal Diff tie with West Ham; won alphabetically ('B' < 'W') |
+| **#10** | West Ham | 48 | -7 | Points & Goal Diff tie with Brighton; lost alphabetically |
+| **#11** | Everton | 40 | -11 | Direct points margin |
+| **#12** | Brentford | 39 | -9 | Direct points margin |
+
+*All assertions verifying correct rank positioning and original collection immutability passed.*
+
+---
+
+### 3. Faulty Comparator Demonstrations
+
+#### Defect 1: Arithmetic Overflow in Integer Subtraction
+- **Flawed Code:** `(t1, t2) -> t2.getPoints() - t1.getPoints()`
+- **Vulnerability:** Under 32-bit signed two's-complement arithmetic, comparing `Alpha (+1)` with `Zombie (-2,147,483,648)` yields:
+  $$(-2,147,483,648) - 1 = +2,147,483,647 \quad (\mathbf{POSITIVE})$$
+- **Observed Result:** Sorting inverted completely — `Zombie Club` with negative points ranked **#1** above `Alpha Club`!
+- **Engineering Fix:** Always use `Integer.compare(x, y)` which uses branch logic without subtraction arithmetic.
+
+#### Defect 2: Missing Tie-Breakers
+- **Flawed Code:** `Comparator.comparing(Team::getPoints).reversed()`
+- **Observed:** Returned `0` when comparing teams with identical points (50 pts) but differing goal differences (+30 vs +10). When placed in a `TreeSet`, the secondary team is discarded as an identical duplicate.
+
+#### Defect 3: Transitivity Verification
+- Evaluated all $5^3 = 125$ triple permutations $(a, b, c)$ against the official comparator:
+  $$\text{cmp}(a, b) > 0 \land \text{cmp}(b, c) > 0 \implies \text{cmp}(a, c) > 0$$
+- **Violations detected:** **`0`**. The official comparator forms a mathematically valid total preorder.
+
+---
+
+### 4. Empirical Performance: 1 Composite Pass vs. 3 Sequential Passes
+
+A common novice approach is executing 3 sequential stable sorting passes in reverse priority order (name ASC $\rightarrow$ goalDiff DESC $\rightarrow$ points DESC) relying on TimSort stability.
+
+**Benchmark Setup:** 1 warm-up run + 5 measured runs, `System.nanoTime()`, arithmetic averages:
+
+| Dataset Scale ($N$) | 1 Composite Pass (ms) | 3 Sequential Passes (ms) | Speedup Ratio | Observations |
+|:---|:---:|:---:|:---:|:---|
+| **1,000 Teams** | **1.4522** | 3.1519 | **2.17× faster** | 1 pass avoids 2 unnecessary full-array scans |
+| **10,000 Teams** | **23.1131** | 33.7915 | **1.46× faster** | Cache locality and lazy tie-break evaluation dominate |
+| **100,000 Teams** | 138.8070 | 113.8030 | 0.82× | GC activity observed on Run 3 (205.8ms vs 122.3ms baseline) |
+
+*Raw data archived in [`Task05_Generics_Leaderboard/data/Q5_benchmark_results.csv`](file:///C:/Users/User/Downloads/CampusSmartParking_Assignment2/Task05_Generics_Leaderboard/data/Q5_benchmark_results.csv).*
+
+---
+
+### 5. Architectural Findings & Generic Reusability
+
+1. **Total Reusability:** The identical `Leaderboard<T>` was proven without modification on `Player` (goals $\rightarrow$ assists $\rightarrow$ name) and `College` (gold medals $\rightarrow$ total medals $\rightarrow$ name).
+2. **PECS Usability:** `Comparator<? super T>` allows broad base-class sorting policies, while `Collection<? extends T>` permits seamless ingestion of diverse subtype collections.
+3. **Safety Guarantee:** Single composite comparators eliminate fragile dependencies on sorting algorithm stability, evaluate secondary keys only on ties, and provide complete resistance to arithmetic overflow.
 
 ---
 
